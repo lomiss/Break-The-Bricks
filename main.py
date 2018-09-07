@@ -65,16 +65,37 @@ def creat_brick():
 # 小球反弹木板方向判断
 def board_collide(ball_position, board_position, ball_speed):
     # ↘方向反弹
-    if ball_speed[0] > 0:
-        angle = (ball_position[1] + 15 - board_position[1]) / (ball_position[0] + 15 - board_position[0])
-        if angle >= 1.0:
+    if ball_speed[0] > 0 and ball_speed[1] > 0:
+        if ball_position[0] - (ball_position[0] + ball_position[3] - board_position[0]) == 0:
+            return False
+        else:
+            angle = (ball_position[1] + ball_position[3] - board_position[1]) / (ball_position[0] + ball_position[3] - board_position[0])
+            if angle > 1.0:
+                return False
+            else:
+                return True
+    # ↙方向反弹
+    elif ball_speed[0] < 0 and ball_speed[1] > 0:
+        if ball_position[0] - (board_position[0] + ball_position[2]) == 0:
+            return False
+        else:
+            angle = (ball_position[1] + ball_position[3] - board_position[1]) / (ball_position[0] - (board_position[0] + board_position[2]))
+            if angle < -1.0:
+                return False
+            else:
+                return True
+     # ↗方向反弹
+    elif ball_speed[0] > 0 and ball_speed[1] < 0:
+        angle = (ball_position[1] - (board_position[1] + board_position[3])) / (ball_position[0] + ball_position[3] - board_position[0])
+        if angle <= -1.0:
             return False
         else:
             return True
-    # ↙方向反弹
-    elif ball_speed[0] < 0:
-        angle = (ball_position[1] + 15 - board_position[1]) / (ball_position[0] - (board_position[0] + 128))
-        if angle <= -1.0:
+
+    # ↖方向反弹
+    else:
+        angle = (ball_position[1] - (board_position[1] + board_position[3])) / (ball_position[0] - (board_position[0] + board_position[2]))
+        if angle >= 1.0:
             return False
         else:
             return True
@@ -97,7 +118,7 @@ def brick_collide(ball_position, brick_position, ball_speed):
         else:
             return True
     # ↘方向反弹
-    if ball_speed[0] > 0 and ball_speed[1] > 0:
+    elif ball_speed[0] > 0 and ball_speed[1] > 0:
         angle = (ball_position[1] + 15 - brick_position[1]) / (ball_position[0] + 15 - brick_position[0])
         if angle >= 1.0:
             return False
@@ -143,7 +164,11 @@ def main():
                 sys.exit()
             if event.type == MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    moving = True
+                    # 仅当鼠标在板内方可移动
+                    mouse_position = pygame.mouse.get_pos()
+                    if boards.rect[0] < mouse_position[0] < boards.rect[0] + boards.rect[2] and \
+                                            boards.rect[1] < mouse_position[1] < boards.rect[1] + boards.rect[3]:
+                        moving = True
             if event.type == MOUSEBUTTONUP:
                 if event.button == 1:
                     moving = False
@@ -157,8 +182,7 @@ def main():
             # 球速恢复
             if event.type == SPEEDUPBALL_TIME:
                 for balls in group_ball:
-                    if balls.ball_speed[0] != 3 or balls.ball_speed[0] != -3 or \
-                                    balls.ball_speed[1] != 3 or balls.ball_speed[1] != -3:
+                    if balls.ball_speed not in ([3, 3], [3, -3], [-3, 3], [-3, -3]):
                         balls.ball_speed[0] //= 2
                         balls.ball_speed[1] //= 2
                 pygame.time.set_timer(SPEEDUPBALL_TIME, 0)
@@ -169,15 +193,16 @@ def main():
         if moving:
             mouse_position = pygame.mouse.get_pos()
             if 450 <= mouse_position[1] <= 573 and 800 >= mouse_position[0] >= 50 and not is_lengthenboard:
-                boards.rect = (mouse_position[0] - 62, 535)
+                boards.rect = (mouse_position[0] - 62, 535, boards.rect[2], boards.rect[3])
             elif 450 <= mouse_position[1] <= 573 and 825 >= mouse_position[0] >= 65 and is_lengthenboard:
-                boards.rect = (mouse_position[0] - 90, 535)
+                boards.rect = (mouse_position[0] - 90, 535, boards.rect[2], boards.rect[3])
             group_board.add(boards)
 
         if not is_lengthenboard:
             screen.blit(boards.current_image, boards.rect)
         if is_lengthenboard:
             screen.blit(boards.current_image, boards.rect)
+
 
         # 对每个小球进行碰撞检测
         for balls in group_ball:
@@ -188,19 +213,27 @@ def main():
                 balls.is_speedupball = False
 
             # 检测球与边界的碰撞
-            if balls.rect.left < 0 or balls.rect.right > width:
+            if balls.rect.left < 0:
+                # 碰撞后赋值为0，防止反弹后仍然碰撞从而卡在边界上
+                balls.rect.left = 0
+                balls.ball_speed[0] = -balls.ball_speed[0]
+                balls.is_hit = False
+            elif balls.rect.right > width:
+                balls.rect.right = width
                 balls.ball_speed[0] = -balls.ball_speed[0]
                 balls.is_hit = False
             elif balls.rect.bottom > height:
-                if is_invincible and not balls.is_hit:
+                if is_invincible:
+                    balls.rect.bottom = height
                     balls.ball_speed[1] = -balls.ball_speed[1]
-                    balls.is_hit = True
+                    balls.is_hit = False
                 elif not is_invincible:
                     group_ball.remove(balls)
             elif balls.rect.top < 0:
-                if not balls.is_hit:
-                    balls.ball_speed[1] = -balls.ball_speed[1]
-                    balls.is_hit = True
+                balls.rect.top = 0
+                balls.ball_speed[1] = -balls.ball_speed[1]
+                balls.is_hit = False
+
 
             # 检测球与板的碰撞
             hit_ball = pygame.sprite.spritecollide(balls, group_board, False, pygame.sprite.collide_mask)
@@ -265,8 +298,7 @@ def main():
                 # 球速度+5(10s)
                 elif rewards.current_image == rewards.image4:
                     for balls in group_ball:
-                        if balls.ball_speed[0] == 3 or balls.ball_speed[0] == -3 or\
-                           balls.ball_speed[1] == 3 or balls.ball_speed[1] == -3:
+                        if balls.ball_speed in ([3, 3], [3, -3], [-3, 3], [-3, -3]):
                             balls.is_speedupball = True
                             pygame.time.set_timer(SPEEDUPBALL_TIME, 10 * 1000)
                 group_reward.remove(rewards)
